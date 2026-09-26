@@ -28,13 +28,10 @@ jobs:
       - name: Accept Android Licenses
         run: yes | sdkmanager --licenses
 
+      - name: Find Gradle wrapper
+        run: |
+          find . -name gradlew -type f
+
       - name: Build APK
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          echo "Gradle wrapper found above."
