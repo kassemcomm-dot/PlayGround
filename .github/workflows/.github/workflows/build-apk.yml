@@ -22,14 +22,8 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: 'build-tools;34.0.0 platforms;android-34'
-
-      - name: Accept Android Licenses
-        run: yes | sdkmanager --licenses
 
       - name: Build APK
-        working-directory: run: ./gradlew assembleDebug
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -38,4 +32,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: playground/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
