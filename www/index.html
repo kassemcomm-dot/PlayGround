@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chess Analyzer — Stockfish Engine</title>
+<meta name="description" content="Free in-browser chess analyzer powered by Stockfish 19. Analyze positions, review lines, and play against the engine." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">♞</span>
+    <div>
+      <h1>Chess Analyzer</h1>
+      <p class="subtitle">Powered by Stockfish 19 <span class="lite-tag">lite</span> · runs 100% in your browser</p>
+    </div>
+  </div>
+  <div class="top-controls">
+    <div id="engineStatus" class="engine-status loading" role="status">
+      <span class="dot" aria-hidden="true"></span><span id="engineStatusText">Loading engine…</span>
+    </div>
+    <label class="depth-label">Depth
+      <select id="depthSelect" aria-label="Analysis depth">
+        <option value="10">10 · fast</option>
+        <option value="14">14</option>
+        <option value="18" selected>18 · default</option>
+        <option value="22">22 · deep</option>
+      </select>
+    </label>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="board-col">
+    <div class="board-row">
+      <div class="evalbar" id="evalBar" title="Evaluation (White perspective)">
+        <div class="evalbar-black" id="evalBarBlack"></div>
+        <div class="evalbar-white" id="evalBarWhite"></div>
+        <div class="evalbar-label" id="evalBarLabel">0.0</div>
+      </div>
+      <div class="board-wrap">
+        <div id="board" class="board" aria-label="Chess board"></div>
+        <svg id="arrowLayer" class="arrow-layer" viewBox="0 0 8 8" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <marker id="arrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="0.55" markerHeight="0.55" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="rgba(21,128,61,.92)"></path>
+            </marker>
+          </defs>
+          <line id="bestArrow" x1="0" y1="0" x2="0" y2="0" visibility="hidden" />
+        </svg>
+        <div id="promoPicker" class="promo-picker hidden" role="dialog" aria-label="Choose promotion piece"></div>
+      </div>
+    </div>
+
+    <div id="gameStatus" class="game-status" role="status">White to move</div>
+
+    <div class="btn-row">
+      <button id="btnNew" class="btn" title="Start a new game">↺ New</button>
+      <button id="btnFlip" class="btn" title="Flip board orientation">⇅ Flip</button>
+      <button id="btnUndo" class="btn" title="Take back a move (←)">← Undo</button>
+      <button id="btnRedo" class="btn" title="Step forward (→)">Redo →</button>
+      <button id="btnHint" class="btn accent" title="Show engine's recommended move">💡 Hint</button>
+      <button id="btnPlayBest" class="btn accent" title="Play the engine's best move">▶ Best</button>
+    </div>
+  </section>
+
+  <aside class="side-col">
+    <section class="card" aria-label="Engine analysis">
+      <h2>Engine analysis <span id="thinkBadge" class="think-badge hidden">thinking…</span></h2>
+      <div class="eval-summary">
+        <div class="eval-big" id="evalBig">0.0</div>
+        <div class="eval-sub">
+          <div>Best: <strong id="bestMoveText">—</strong></div>
+          <div id="winChanceText">White 50% · Black 50%</div>
+        </div>
+      </div>
+      <ol id="pvList" class="pv-list"></ol>
+      <div class="engine-meta" id="engineMeta">Engine idle.</div>
+      <canvas id="evalChart" width="520" height="120" aria-label="Evaluation history chart"></canvas>
+    </section>
+
+    <section class="card" aria-label="Moves">
+      <h2>Moves</h2>
+      <div id="moveList" class="move-list"><span class="muted">No moves yet — play something!</span></div>
+    </section>
+
+    <section class="card" aria-label="Play against the engine">
+      <h2>Play vs computer</h2>
+      <div class="play-grid">
+        <label>Play as
+          <select id="humanColor">
+            <option value="w" selected>White</option>
+            <option value="b">Black</option>
+          </select>
+        </label>
+        <label>Strength
+          <select id="difficulty">
+            <option value="0">Beginner · ~600</option>
+            <option value="1" selected>Casual · ~1000</option>
+            <option value="2">Club · ~1400</option>
+            <option value="3">Expert · ~1800</option>
+            <option value="4">Master · ~2300</option>
+          </select>
+        </label>
+      </div>
+      <div class="btn-row">
+        <button id="btnPlayStart" class="btn primary">Start game</button>
+        <button id="btnPlayStop" class="btn" disabled>Stop</button>
+      </div>
+      <p class="muted small" id="playStatus">Analysis mode — engine suggests, you move both sides.</p>
+    </section>
+
+    <section class="card" aria-label="Position and PGN tools">
+      <h2>Position &amp; PGN</h2>
+      <label class="field">FEN
+        <textarea id="fenInput" rows="2" spellcheck="false"></textarea>
+      </label>
+      <div class="btn-row wrap">
+        <button id="btnFenLoad" class="btn">Load FEN</button>
+        <button id="btnFenCopy" class="btn">Copy FEN</button>
+        <button id="btnStartpos" class="btn">Startpos</button>
+      </div>
+      <label class="field">PGN
+        <textarea id="pgnInput" rows="4" spellcheck="false" placeholder="Paste PGN here…"></textarea>
+      </label>
+      <div class="btn-row wrap">
+        <button id="btnPgnLoad" class="btn">Load PGN</button>
+        <button id="btnPgnCopy" class="btn">Copy PGN</button>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<footer class="footer">
+  <span>Engine: Stockfish 19 lite (GPLv3) by the Stockfish team, web build by Chess.com · Rules: chess.js · No server — your games never leave this device.</span>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
