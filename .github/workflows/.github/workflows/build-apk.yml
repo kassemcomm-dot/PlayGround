@@ -29,7 +29,7 @@ jobs:
         run: yes | sdkmanager --licenses
 
       - name: Build APK
-        working-directory: playground
+        working-directory: run: ./gradlew assembleDebug
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
