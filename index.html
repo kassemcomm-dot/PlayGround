@@ -3,140 +3,644 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Chess Analyzer — Stockfish Engine</title>
-<meta name="description" content="Free in-browser chess analyzer powered by Stockfish 19. Analyze positions, review lines, and play against the engine." />
+<title>Grandmaster Lab — Chess Analyzer with Stockfish</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>" />
-<link rel="stylesheet" href="styles.css" />
+<meta name="description" content="Free chess analyzer with Stockfish engine: live evaluation, best moves, play vs engine, FEN/PGN import." />
+<style>
+:root{
+  --bg:#0b0e14; --bg2:#111624; --panel:#151b2e; --panel2:#1a2240;
+  --line:rgba(255,255,255,.09); --txt:#eef1ff; --muted:#9aa3c0;
+  --accent:#5eead4; --accent2:#818cf8; --gold:#fbbf24;
+  --good:#34d399; --bad:#f87171;
+  --light-sq:#ebecd9; --dark-sq:#739552;
+  --radius:18px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:ui-sans-system,-apple-system,"Segoe UI",Roboto,Inter,Helvetica,Arial;
+  background:radial-gradient(1000px 500px at 20% -10%,#1e2a5a 0%,transparent 60%),
+             radial-gradient(900px 500px at 90% 0%,#0e3b3a 0%,transparent 55%),
+             var(--bg);
+  color:var(--txt); min-height:100vh;
+}
+a{color:var(--accent)}
+.topbar{
+  max-width:1240px;margin:0 auto;padding:18px 20px 6px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+}
+.logo{
+  width:46px;height:46px;border-radius:14px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--accent2),#22d3ee 60%,var(--accent));
+  font-size:28px;box-shadow:0 8px 30px rgba(129,140,248,.35);
+}
+h1{font-size:22px;margin:0;letter-spacing:.2px}
+h1 small{display:block;font-size:12.5px;color:var(--muted);font-weight:500;letter-spacing:.3px}
+.pill{
+  margin-left:auto;display:flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,.06);border:1px solid var(--line);
+  padding:8px 12px;border-radius:999px;font-size:13px;color:var(--muted);
+}
+.dot{width:10px;height:10px;border-radius:50%;background:#f87171;box-shadow:0 0 0 4px rgba(248,113,113,.18)}
+.dot.on{background:#34d399;box-shadow:0 0 0 4px rgba(52,211,153,.18)}
+.dot.think{background:var(--gold);box-shadow:0 0 0 4px rgba(251,191,36,.18);animation:pulse 1s infinite}
+@keyframes pulse{50%{transform:scale(1.25)}}
+.layout{
+  max-width:1240px;margin:0 auto;padding:14px 20px 30px;
+  display:grid;grid-template-columns:minmax(0,640px) minmax(320px,1fr);
+  gap:18px;align-items:start;
+}
+@media(max-width:980px){.layout{grid-template-columns:1fr}}
+.card{
+  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+  border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden;
+}
+.board-wrap{padding:16px}
+.board-top{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.player-chip{
+  display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.3);
+  border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:13px;min-width:200px;flex:1;
+}
+.player-chip .cap{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:18px;background:rgba(255,255,255,.08)}
+.player-chip b{font-size:13px}
+.player-chip span{color:var(--muted);font-size:12px;display:block}
+.captured{font-size:15px;letter-spacing:1px;min-height:20px;line-height:1}
+.board-row{display:flex;gap:12px}
+.evalbar{
+  width:34px;border-radius:10px;overflow:hidden;position:relative;
+  background:#111;border:1px solid var(--line);min-height:400px;
+  display:flex;flex-direction:column;
+}
+.evalbar .w{background:#f8fafc;transition:height .5s ease}
+.evalbar .b{background:#0b0e14;flex:1}
+.evalbar .num{
+  position:absolute;left:0;right:0;top:50%;transform:translateY(-50%) rotate(-90deg);
+  font-size:11px;font-weight:800;color:#111;mix-blend-mode:plus-lighter;
+  text-align:center;white-space:nowrap;pointer-events:none;
+}
+#evalNum{color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.8);font-variant-numeric:tabular-nums}
+.board-outer{flex:1}
+#board{
+  width:100%;aspect-ratio:1/1;display:grid;
+  grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+  border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,.5);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+  touch-action:manipulation;user-select:none;
+}
+.sq{position:relative;display:grid;place-items:center;cursor:pointer}
+.sq.light{background:var(--light-sq)} .sq.dark{background:var(--dark-sq)}
+.sq.sel{outline:3px solid #facc15;outline-offset:-3px;z-index:2}
+.sq.last{box-shadow:inset 0 0 0 4px rgba(250,204,21,.9)}
+.sq.best-from{box-shadow:inset 0 0 0 4px rgba(34,211,238,.95)}
+.sq.best-to{box-shadow:inset 0 0 0 4px rgba(34,211,238,.95)}
+.sq.check{box-shadow:inset 0 0 0 5px rgba(239,68,68,.95)}
+.sq .pc{
+  font-size:clamp(28px,5.2vw,50px);line-height:1;pointer-events:none;
+  filter:drop-shadow(0 2px 2px rgba(0,0,0,.35));
+}
+.sq .pc.w{color:#fafafa;text-shadow:0 0 2px #000,0 2px 4px rgba(0,0,0,.6)}
+.sq .pc.b{color:#111827;text-shadow:0 0 2px #fff,0 2px 4px rgba(0,0,0,.3)}
+.coord{position:absolute;font-size:10px;font-weight:800;opacity:.85;pointer-events:none}
+.coord.r{top:3px;left:4px} .coord.f{bottom:2px;right:4px}
+.light .coord{color:#3f6212} .dark .coord{color:#fefce8}
+.hintdot{position:absolute;width:26%;height:26%;border-radius:50%;background:rgba(0,0,0,.28);pointer-events:none}
+.capture-ring{position:absolute;inset:6%;border:4px solid rgba(0,0,0,.32);border-radius:50%;pointer-events:none}
+.board-foot{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+button,.btn{
+  appearance:none;border:1px solid var(--line);background:rgba(255,255,255,.07);
+  color:var(--txt);padding:9px 12px;border-radius:11px;font-size:13px;font-weight:600;
+  cursor:pointer;transition:.15s;
+}
+button:hover{background:rgba(255,255,255,.12);transform:translateY(-1px)}
+button.primary{background:linear-gradient(135deg,#6366f1,#22d3ee);border-color:transparent;color:#060a18}
+button.gold{background:linear-gradient(135deg,#f59e0b,#facc15);border-color:transparent;color:#231002}
+button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.side{display:flex;flex-direction:column;gap:14px}
+.panel{padding:14px}
+.panel h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:0 0 10px}
+.eval-big{display:flex;align-items:end;gap:12px}
+#score{font-size:42px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
+#mateTag{font-size:13px;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.4);color:#fde68a;padding:3px 8px;border-radius:999px;display:none}
+.kv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}
+.kv div{background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center}
+.kv b{display:block;font-size:15px} .kv span{font-size:11px;color:var(--muted)}
+#pv{background:rgba(0,0,0,.32);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13px;line-height:1.5;min-height:58px;margin-top:10px}
+#bestmoveRow{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+#bestmove{font-weight:800;background:rgba(94,234,212,.12);border:1px solid rgba(94,234,212,.35);padding:6px 10px;border-radius:9px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.controls label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
+input[type=range],select,input[type=text]{width:100%}
+select,input[type=text]{
+  background:#0d1222;color:var(--txt);border:1px solid var(--line);
+  border-radius:10px;padding:9px 10px;font-size:13px;
+}
+input[type=range]{accent-color:#22d3ee}
+.moves{max-height:220px;overflow:auto;display:flex;flex-wrap:wrap;gap:6px;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:10px;padding:10px}
+.mv{font-size:12.5px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid transparent;cursor:pointer}
+.mv.cur{background:rgba(250,204,21,.2);border-color:rgba(250,204,21,.6)}
+.mv:hover{border-color:var(--line)}
+#graph{width:100%;height:90px;background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{flex:1;min-width:120px}
+.fenrow{display:flex;gap:8px} .fenrow input{flex:1;font-family:ui-monospace,Menlo,monospace;font-size:11px}
+.status{font-size:13px;color:var(--muted);line-height:1.6}
+.status b{color:var(--txt)}
+.promo{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;place-items:center;z-index:50;
+}
+.promo.open{display:grid}
+.promo .box{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;gap:10px}
+.promo button{font-size:34px;padding:10px 14px}
+.footer{max-width:1240px;margin:0 auto;padding:0 20px 26px;color:var(--muted);font-size:12.5px;line-height:1.6}
+code{background:rgba(255,255,255,.08);padding:2px 6px;border-radius:6px}
+</style>
 </head>
 <body>
-<header class="topbar">
-  <div class="brand">
-    <span class="brand-mark" aria-hidden="true">♞</span>
-    <div>
-      <h1>Chess Analyzer</h1>
-      <p class="subtitle">Powered by Stockfish 19 <span class="lite-tag">lite</span> · runs 100% in your browser</p>
+<div class="topbar">
+  <div class="logo">♞</div>
+  <h1>Grandmaster Lab <small>Chess analyzer • Stockfish engine • eval, best move, play &amp; review</small></h1>
+  <div class="pill"><span id="engineDot" class="dot"></span><span id="engineLabel">Starting Stockfish…</span></div>
+</div>
+
+<div class="layout">
+  <div class="card">
+    <div class="board-wrap">
+      <div class="board-top">
+        <div class="player-chip" id="topChip"><div class="cap" id="topCap">♚</div><div><b id="topName">Black</b><span id="topCap2" class="captured"></span></div></div>
+        <div class="player-chip" id="botChip"><div class="cap" id="botCap">♔</div><div><b id="botName">White</b><span id="botCap2" class="captured"></span></div></div>
+      </div>
+      <div class="board-row">
+        <div class="evalbar" title="Evaluation"><div class="b" id="evalB"></div><div class="w" id="evalW" style="height:50%"></div><div class="num"><span id="evalNum">0.0</span></div></div>
+        <div class="board-outer"><div id="board" aria-label="Chess board"></div></div>
+      </div>
+      <div class="board-foot">
+        <button id="btnNew" class="primary">♻ New game</button>
+        <button id="btnFlip">⇅ Flip</button>
+        <button id="btnUndo">↩ Undo</button>
+        <button id="btnRedo">↪ Redo</button>
+        <button id="btnHint" class="gold">✨ Hint</button>
+        <button id="btnPlayBest">▶ Play best</button>
+        <button id="btnCopyFen">Copy FEN</button>
+      </div>
+      <div class="status" style="margin-top:10px" id="status">White to move • Drag or tap a piece. Engine analysis starts automatically.</div>
     </div>
   </div>
-  <div class="top-controls">
-    <div id="engineStatus" class="engine-status loading" role="status">
-      <span class="dot" aria-hidden="true"></span><span id="engineStatusText">Loading engine…</span>
+
+  <div class="side">
+    <div class="card panel">
+      <h2>⚡ Live engine analysis</h2>
+      <div class="eval-big"><div id="score">0.0</div><div id="mateTag"></div><div style="margin-left:auto;text-align:right;font-size:12px;color:var(--muted)"><div>depth <b id="depth" style="color:#fff">–</b></div><div><span id="think">idle</span></div></div></div>
+      <div class="kv"><div><b id="kNps">–</b><span>kN/s</span></div><div><b id="kNodes">–</b><span>nodes</span></div><div><b id="kTime">–</b><span>time</span></div></div>
+      <div id="pv">Engine loading… play a move and analysis will appear here.</div>
+      <div id="bestmoveRow"><span style="font-size:12px;color:var(--muted)">Best:</span><span id="bestmove">–</span><button id="btnArrow">Show arrow: ON</button></div>
+      <div class="controls" style="margin-top:12px">
+        <div><label>Depth: <b id="depthVal" style="color:#fff">16</b></label><input id="depthRange" type="range" min="8" max="24" value="16" /></div>
+        <div><label>Engine strength</label><select id="skill"><option value="20">Full strength</option><option value="15">Strong club (2000)</option><option value="10">Intermediate (1600)</option><option value="5">Casual (1200)</option><option value="0">Beginner (800)</option></select></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="btnAnalyze" class="primary">⏸ Pause analysis</button>
+        <button id="btnSound">🔊 Sound: on</button>
+      </div>
     </div>
-    <label class="depth-label">Depth
-      <select id="depthSelect" aria-label="Analysis depth">
-        <option value="10">10 · fast</option>
-        <option value="14">14</option>
-        <option value="18" selected>18 · default</option>
-        <option value="22">22 · deep</option>
-      </select>
-    </label>
+
+    <div class="card panel">
+      <h2>🎮 Play vs engine</h2>
+      <div class="row">
+        <div><label style="font-size:12px;color:var(--muted)">Mode</label><select id="mode"><option value="analyze">Analyze (2 players)</option><option value="w">Play as White</option><option value="b">Play as Black</option></select></div>
+        <div><label style="font-size:12px;color:var(--muted)">Engine replies with depth</label><select id="playDepth"><option>10</option><option selected>14</option><option>18</option></select></div>
+      </div>
+      <div class="status" id="playStatus" style="margin-top:8px">Analysis mode: make moves for both sides.</div>
+    </div>
+
+    <div class="card panel">
+      <h2>📜 Moves &amp; evaluation graph</h2>
+      <canvas id="graph" width="600" height="180"></canvas>
+      <div class="moves" id="moves" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:10px">
+        <button id="btnStart">⏮ Start</button>
+        <button id="btnPrev">◀ Prev</button>
+        <button id="btnNext">Next ▶</button>
+        <button id="btnEnd">End ⏭</button>
+      </div>
+    </div>
+
+    <div class="card panel">
+      <h2>🔗 FEN / PGN</h2>
+      <div class="fenrow"><input id="fen" spellcheck="false" /><button id="btnLoadFen">Load</button></div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnCopyPgn">Copy PGN</button>
+        <button id="btnPastePgn">Import PGN</button>
+        <button id="btnFlip2">Swap side</button>
+      </div>
+      <div class="status" style="margin-top:8px">Tip: paste any FEN e.g. <code>r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3</code> then Load. Works offline for board play; engine needs internet once to download Stockfish.</div>
+    </div>
   </div>
-</header>
+</div>
 
-<main class="layout">
-  <section class="board-col">
-    <div class="board-row">
-      <div class="evalbar" id="evalBar" title="Evaluation (White perspective)">
-        <div class="evalbar-black" id="evalBarBlack"></div>
-        <div class="evalbar-white" id="evalBarWhite"></div>
-        <div class="evalbar-label" id="evalBarLabel">0.0</div>
-      </div>
-      <div class="board-wrap">
-        <div id="board" class="board" aria-label="Chess board"></div>
-        <svg id="arrowLayer" class="arrow-layer" viewBox="0 0 8 8" preserveAspectRatio="none" aria-hidden="true">
-          <defs>
-            <marker id="arrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="0.55" markerHeight="0.55" orient="auto-start-reverse">
-              <path d="M 0 1 L 9 5 L 0 9 z" fill="rgba(21,128,61,.92)"></path>
-            </marker>
-          </defs>
-          <line id="bestArrow" x1="0" y1="0" x2="0" y2="0" visibility="hidden" />
-        </svg>
-        <div id="promoPicker" class="promo-picker hidden" role="dialog" aria-label="Choose promotion piece"></div>
-      </div>
-    </div>
+<div class="footer">Built as a static app — no server needed. Board logic: <code>chess.js</code> via CDN. Engine: <code>Stockfish 10 (asm.js)</code> via CDN with automatic fallback. Evaluation is from White's perspective. Tip: use Hint to learn, Play best to punish blunders.</div>
 
-    <div id="gameStatus" class="game-status" role="status">White to move</div>
+<div class="promo" id="promo"><div class="box">
+  <button data-p="q">♕</button><button data-p="r">♖</button><button data-p="b">♗</button><button data-p="n">♘</button>
+</div></div>
 
-    <div class="btn-row">
-      <button id="btnNew" class="btn" title="Start a new game">↺ New</button>
-      <button id="btnFlip" class="btn" title="Flip board orientation">⇅ Flip</button>
-      <button id="btnUndo" class="btn" title="Take back a move (←)">← Undo</button>
-      <button id="btnRedo" class="btn" title="Step forward (→)">Redo →</button>
-      <button id="btnHint" class="btn accent" title="Show engine's recommended move">💡 Hint</button>
-      <button id="btnPlayBest" class="btn accent" title="Play the engine's best move">▶ Best</button>
-    </div>
-  </section>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script>
+/* Stockfish asm.js (niklasf/stockfish.js v10) is a Web-Worker script, NOT a
+   main-thread factory. It must run inside a Worker. Because classic Workers
+   must be same-origin, we fetch the CDN script and boot it from a Blob URL
+   (jsdelivr + cdnjs both send CORS headers). Fully static-safe. */
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const boardEl=$('board'), statusEl=$('status'), movesEl=$('moves');
+const scoreEl=$('score'), pvEl=$('pv'), depthEl=$('depth'), bestEl=$('bestmove');
+const evalW=$('evalW'), evalNum=$('evalNum'), mateTag=$('mateTag');
+const engineDot=$('engineDot'), engineLabel=$('engineLabel'), thinkEl=$('think');
+const kNps=$('kNps'), kNodes=$('kNodes'), kTime=$('kTime');
+const fenInput=$('fen'), graph=$('graph').getContext('2d');
 
-  <aside class="side-col">
-    <section class="card" aria-label="Engine analysis">
-      <h2>Engine analysis <span id="thinkBadge" class="think-badge hidden">thinking…</span></h2>
-      <div class="eval-summary">
-        <div class="eval-big" id="evalBig">0.0</div>
-        <div class="eval-sub">
-          <div>Best: <strong id="bestMoveText">—</strong></div>
-          <div id="winChanceText">White 50% · Black 50%</div>
-        </div>
-      </div>
-      <ol id="pvList" class="pv-list"></ol>
-      <div class="engine-meta" id="engineMeta">Engine idle.</div>
-      <canvas id="evalChart" width="520" height="120" aria-label="Evaluation history chart"></canvas>
-    </section>
+let game=new Chess();
+let orientation='w', selected=null, legalCache=[];
+let historyStack=[], redoStack=[], viewPly=0; // viewPly = number of half-moves shown
+let positions=[]; // fen per ply incl start
+let evals=[0]; // cp from white perspective per ply
+let best={from:null,to:null,uci:null};
+let showArrow=true, soundOn=true, analyzeOn=true;
+let engine=null, engineReady=false, engineThinking=false, lastInfoTime=0, searchStart=0;
+let curScoreCp=0, curMate=null, curDepth=0, curPv=[], curNodes=0;
 
-    <section class="card" aria-label="Moves">
-      <h2>Moves</h2>
-      <div id="moveList" class="move-list"><span class="muted">No moves yet — play something!</span></div>
-    </section>
+const PIECES={k:{w:'♚',b:'♚'},q:{w:'♛',b:'♛'},r:{w:'♜',b:'♜'},b:{w:'♝',b:'♝'},n:{w:'♞',b:'♞'},p:{w:'♟',b:'♟'}};
+// Use filled glyphs; color via CSS
+const GLYPH={k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
 
-    <section class="card" aria-label="Play against the engine">
-      <h2>Play vs computer</h2>
-      <div class="play-grid">
-        <label>Play as
-          <select id="humanColor">
-            <option value="w" selected>White</option>
-            <option value="b">Black</option>
-          </select>
-        </label>
-        <label>Strength
-          <select id="difficulty">
-            <option value="0">Beginner · ~600</option>
-            <option value="1" selected>Casual · ~1000</option>
-            <option value="2">Club · ~1400</option>
-            <option value="3">Expert · ~1800</option>
-            <option value="4">Master · ~2300</option>
-          </select>
-        </label>
-      </div>
-      <div class="btn-row">
-        <button id="btnPlayStart" class="btn primary">Start game</button>
-        <button id="btnPlayStop" class="btn" disabled>Stop</button>
-      </div>
-      <p class="muted small" id="playStatus">Analysis mode — engine suggests, you move both sides.</p>
-    </section>
+function beep(freq){ if(!soundOn) return; try{ const C=window.AudioContext||window.webkitAudioContext; if(!C) return; const c=beep.ctx||(beep.ctx=new C()); const o=c.createOscillator(),g=c.createGain(); o.frequency.value=freq||520; g.gain.value=.06; o.connect(g);g.connect(c.destination);o.start();setTimeout(()=>o.stop(),120);}catch(e){} }
+function chessjs(fen){ try{ const g=new Chess(fen); return g;}catch(e){return null;} }
+function turn(){ return game.turn(); }
+function atView(){ return viewPly>=historyStack.length; }
+function currentFen(){ if(atView()) return game.fen(); // reconstruct
+  const g=new Chess(); historyStack.slice(0,viewPly).forEach(m=>g.move(m)); return g.fen(); }
+function boardState(){ const g=new Chess(); historyStack.slice(0,viewPly).forEach(m=>g.move(m)); return g; }
 
-    <section class="card" aria-label="Position and PGN tools">
-      <h2>Position &amp; PGN</h2>
-      <label class="field">FEN
-        <textarea id="fenInput" rows="2" spellcheck="false"></textarea>
-      </label>
-      <div class="btn-row wrap">
-        <button id="btnFenLoad" class="btn">Load FEN</button>
-        <button id="btnFenCopy" class="btn">Copy FEN</button>
-        <button id="btnStartpos" class="btn">Startpos</button>
-      </div>
-      <label class="field">PGN
-        <textarea id="pgnInput" rows="4" spellcheck="false" placeholder="Paste PGN here…"></textarea>
-      </label>
-      <div class="btn-row wrap">
-        <button id="btnPgnLoad" class="btn">Load PGN</button>
-        <button id="btnPgnCopy" class="btn">Copy PGN</button>
-      </div>
-    </section>
-  </aside>
-</main>
+function syncPositions(){ positions=['rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1']; const g=new Chess(); historyStack.forEach(m=>{ g.move({from:m.from,to:m.to,promotion:m.promotion}); positions.push(g.fen()); }); }
 
-<footer class="footer">
-  <span>Engine: Stockfish 19 lite (GPLv3) by the Stockfish team, web build by Chess.com · Rules: chess.js · No server — your games never leave this device.</span>
-</footer>
+function render(){
+  const g=boardState();
+  const turnC=g.turn();
+  // board squares
+  boardEl.innerHTML='';
+  const files='abcdefgh';
+  const last = historyStack[viewPly-1];
+  const inCheck=isCheck(g);
+  let kingSq=null;
+  if(inCheck){ // find king
+    const b=g.board(); outer: for(let r=0;r<8;r++)for(let f=0;f<8;f++){const p=b[r][f]; if(p&&p.type==='k'&&p.color===turnC){kingSq=files[f]+(8-r);break outer;}}
+  }
+  for(let r=0;r<8;r++)for(let f=0;f<8;f++){
+    const fr = orientation==='w'? r : 7-r;
+    const ff = orientation==='w'? f : 7-f;
+    const sq=files[ff]+(8-fr);
+    const isLight=(fr+ff)%2===1;
+    const d=document.createElement('div');
+    d.className='sq '+(isLight?'light':'dark'); d.dataset.sq=sq;
+    if(last&&(last.from===sq||last.to===sq)) d.classList.add('last');
+    if(showArrow&&best.from===sq) d.classList.add('best-from');
+    if(showArrow&&best.to===sq) d.classList.add('best-to');
+    if(kingSq===sq) d.classList.add('check');
+    if(selected===sq) d.classList.add('sel');
+    if(f===0){const c=document.createElement('span');c.className='coord r';c.textContent=8-fr;d.appendChild(c);}
+    if(r===7){const c=document.createElement('span');c.className='coord f';c.textContent=files[ff];d.appendChild(c);}
+    const piece=g.get(sq);
+    if(piece){const s=document.createElement('span');s.className='pc '+piece.color;s.textContent=GLYPH[piece.type];d.appendChild(s);}
+    if(selected){ const mv=legalCache.find(m=>m.to===sq); if(mv){ if(piece){const ring=document.createElement('span');ring.className='capture-ring';d.appendChild(ring);} else {const dot=document.createElement('span');dot.className='hintdot';d.appendChild(dot);} } }
+    d.addEventListener('click',()=>onSquare(sq));
+    boardEl.appendChild(d);
+  }
+  // status
+  let s='';
+  if(isCheckmate(g)) s=`Checkmate — <b>${turnC==='w'?'Black':'White'} wins</b>`;
+  else if(isDraw(g)) s='<b>Draw</b> — '+drawReason(g);
+  else s=`<b>${turnC==='w'?'White':'Black'} to move</b>`+(isCheck(g)?' • check!':'')+(atView()?'':' • viewing history (Next/End to return)');
+  if(!atView()) s+=' • analysis shows viewed position';
+  statusEl.innerHTML=s;
+  // chips
+  const topColor=orientation==='w'?'b':'w';
+  $('topName').textContent=topColor==='w'?'White':'Black';
+  $('botName').textContent=orientation==='w'?'White':'Black';
+  $('topCap').textContent=topColor==='w'?'♔':'♚'; $('botCap').textContent=orientation==='w'?'♔':'♚';
+  const caps=capturedPieces(g);
+  const topCaps = topColor==='w'? caps.byWhite : caps.byBlack;
+  const botCaps = orientation==='w'? caps.byWhite : caps.byBlack;
+  // captured by that player = opponent pieces
+  $('topCap2').textContent=topCaps; $('botCap2').textContent=botCaps;
+  renderMoves(); drawGraph();
+  fenInput.value=currentFen();
+  maybeEngineMove();
+}
+function capturedPieces(g){
+  const count={P:8,N:2,B:2,R:2,Q:1,p:8,n:2,b:2,r:2,q:1};
+  g.board().flat().forEach(p=>{ if(!p)return; const k=p.color==='w'?p.type.toUpperCase():p.type; count[k]--; });
+  const sym={P:'♙',N:'♘',B:'♗',R:'♖',Q:'♕',p:'♟',n:'♞',b:'♝',r:'♜',q:'♛'};
+  let byWhite='',byBlack='';
+  Object.keys(count).forEach(k=>{ for(let i=0;i<count[k];i++){ if(k===k.toUpperCase()) byBlack+=sym[k]; else byWhite+=sym[k]; }});
+  // byWhite = black pieces captured by white
+  return {byWhite,byBlack};
+}
+// compat helpers
+function isCheck(g){ return g.in_check?g.in_check():(g.isCheck?g.isCheck():false); }
+function isCheckmate(g){ return g.in_checkmate?g.in_checkmate():(g.isCheckmate?g.isCheckmate():false); }
+function isDraw(g){ return g.in_draw?g.in_draw():(g.isDraw?g.isDraw():false); }
+function drawReason(g){
+  try{
+    if(g.in_stalemate&&g.in_stalemate())return 'stalemate';
+    if(g.in_threefold_repetition&&g.in_threefold_repetition())return 'threefold repetition';
+    if(g.insufficient_material&&g.insufficient_material())return 'insufficient material';
+  }catch(e){}
+  return 'draw';
+}
+function legalMoves(g,sq){ try{ return g.moves({square:sq,verbose:true}); }catch(e){return [];} }
 
-<script type="module" src="app.js"></script>
+function onSquare(sq){
+  if(!atView()){ // jump to live on interaction? keep view, ignore unless going live
+    // allow selecting only in live? auto go live
+    viewPly=historyStack.length; selected=null; render(); return;
+  }
+  const g=game;
+  const piece=g.get(sq);
+  if(selected){
+    const mv=legalCache.find(m=>m.to===sq);
+    if(mv){ doMove(selected,sq); return; }
+  }
+  if(piece&&piece.color===g.turn()){
+    if(selected===sq){selected=null;legalCache=[];}
+    else{selected=sq;legalCache=legalMoves(g,sq);}
+  } else { selected=null;legalCache=[]; }
+  render();
+}
+function doMove(from,to,promotion){
+  const g=game;
+  const piece=g.get(from);
+  const isPromo=piece&&piece.type==='p'&&((piece.color==='w'&&to[1]==='8')||(piece.color==='b'&&to[1]==='1'));
+  if(isPromo&&!promotion){ askPromotion(p=>doMove(from,to,p)); return; }
+  let mv=null;
+  try{ mv=g.move({from,to,promotion:promotion||'q'}); }catch(e){ mv=null; }
+  if(!mv){selected=null;legalCache=[];render();return;}
+  historyStack.push({from:mv.from,to:mv.to, promotion:mv.promotion, san:mv.san, color:mv.color, flags:mv.flags});
+  redoStack=[]; viewPly=historyStack.length;
+  selected=null;legalCache=[];
+  beep(mv.captured?300:520);
+  // reset eval for new position (keep old evals, append placeholder copying last)
+  syncPositions();
+  // naive local eval continuity: keep last until engine updates
+  evals[viewPly]=evals[viewPly-1]??0;
+  best={from:null,to:null,uci:null};
+  render(); requestAnalysis();
+}
+function undo(){ if(viewPly>0&&atView()){ const m=game.undo(); if(m){redoStack.push(historyStack.pop()); viewPly=historyStack.length;} } else if(viewPly>0){ viewPly--; } selected=null; best={from:null,to:null,uci:null}; render(); requestAnalysis(); }
+function redo(){ if(redoStack.length&&atView()){ const m=redoStack.pop(); game.move({from:m.from,to:m.to,promotion:m.promotion}); historyStack.push(m); viewPly=historyStack.length; } else if(viewPly<historyStack.length){ viewPly++; } render(); requestAnalysis(); }
+
+function renderMoves(){
+  movesEl.innerHTML='';
+  if(!historyStack.length){movesEl.innerHTML='<span style="color:var(--muted);font-size:13px">No moves yet — White starts. Try 1. e4!</span>';return;}
+  for(let i=0;i<historyStack.length;i+=2){
+    const n=i/2+1;
+    const w=historyStack[i], b=historyStack[i+1];
+    const lab=document.createElement('span');lab.style.cssText='color:var(--muted);font-size:12px;align-self:center';lab.textContent=n+'.';movesEl.appendChild(lab);
+    [[w,i+1],[b,i+2]].forEach(([m,ply])=>{ if(!m)return; const el=document.createElement('span'); el.className='mv'+(viewPly===ply?' cur':''); el.textContent=m.san; el.onclick=()=>{viewPly=ply;selected=null;render();requestAnalysis();}; movesEl.appendChild(el); });
+  }
+  movesEl.scrollTop=movesEl.scrollHeight;
+}
+// ---- eval bar + graph ----
+function setEval(cp,mate){
+  curScoreCp=cp;curMate=mate;
+  const disp = mate!=null? ('M'+Math.abs(mate)): (cp/100).toFixed(1);
+  scoreEl.textContent = mate!=null? '#'+Math.abs(mate):((cp/100>0?'+':'')+(cp/100).toFixed(1));
+  evalNum.textContent = mate!=null? ('M'+Math.abs(mate)) : Math.abs(cp/100).toFixed(1);
+  if(mate!=null){mateTag.style.display='inline-block';mateTag.textContent=(mate>0?'White mates in ':'Black mates in ')+Math.abs(mate);}
+  else mateTag.style.display='none';
+  // bar: white perspective, sigmoid
+  const p = mate!=null? (mate>0?1:0) : 1/(1+Math.pow(10,-cp/400*0.5));
+  // simpler: use tanh
+  const pp = mate!=null?(mate>0?1:0):(0.5+Math.tanh(cp/600)/2);
+  evalW.style.height=(pp*100).toFixed(1)+'%';
+  evals[viewPly]= mate!=null? (mate>0?10000:-10000) : cp;
+  drawGraph();
+}
+function drawGraph(){
+  const c=graph, W=600,H=180; c.clearRect(0,0,W,H);
+  c.strokeStyle='rgba(255,255,255,.12)';c.beginPath();c.moveTo(0,H/2);c.lineTo(W,H/2);c.stroke();
+  if(historyStack.length<1){c.fillStyle='#9aa3c0';c.font='22px sans-serif';c.fillText('eval graph appears as you play',20,H/2-10);return;}
+  const vals=[]; for(let i=0;i<=historyStack.length;i++){let v=evals[i]; if(v==null)v=evals[i-1]??0; v=Math.max(-800,Math.min(800,Math.abs(v)>9000?(v>0?800:-800):v)); vals.push(v);}
+  c.strokeStyle='#5eead4';c.lineWidth=3;c.beginPath();
+  vals.forEach((v,i)=>{const x=vals.length===1?W/2:(i/(vals.length-1||1))*(W-16)+8; const y=H/2 - (v/800)*(H/2-10); i?c.lineTo(x,y):c.moveTo(x,y);});
+  c.stroke();
+  // view marker
+  const x=(viewPly/(historyStack.length||1))*(W-16)+8;
+  c.fillStyle='#facc15';c.beginPath();c.arc(Math.min(W-8,Math.max(8,x)),H/2,5,0,7);c.fill();
+}
+// ---- engine (Web Worker via Blob URL) ----
+function setEngineStatus(txt,cls){ engineLabel.textContent=txt; engineDot.className='dot'+(cls?' '+cls:''); }
+const SF_URLS=[
+  'https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js'
+];
+async function initEngine(){
+  setEngineStatus('Starting Stockfish…','think');
+  for(const url of SF_URLS){
+    try{
+      const res=await fetch(url);
+      if(!res.ok) continue;
+      const code=await res.text();
+      if(code.length<200000) continue; // sanity: asm.js build is ~1.5MB
+      const blob=new Blob([code],{type:'application/javascript'});
+      const wurl=URL.createObjectURL(blob);
+      const worker=new Worker(wurl);
+      engine={
+        postMessage:(m)=>worker.postMessage(m),
+        _worker:worker
+      };
+      worker.onmessage=(ev)=>onEngineMsg(typeof ev==='string'?ev:ev.data);
+      worker.onerror=()=>{ throw new Error('worker error'); };
+      wireEngine();
+      return; // success — wireEngine takes over
+    }catch(e){ /* try next CDN */ }
+  }
+  setEngineStatus('Engine offline — board still playable','');
+  pvEl.textContent='Could not load Stockfish (network blocked). Board play, FEN/PGN, move list and eval graph still work. Connect to the internet and reload for live engine analysis.';
+}
+function wireEngine(){
+  if(!engine) return;
+  try{ engine.postMessage('uci'); }catch(e){}
+  setEngineStatus('Stockfish loading…','think');
+  // watchdog: if no uciok in 12s, try next CDN / report offline
+  setTimeout(()=>{ if(!engineReady) setEngineStatus('Engine slow — still loading…','think'); },12000);
+}
+function onEngineMsg(ev){
+  const msg=typeof ev==='string'?ev:(ev&&ev.data!=null?ev.data:ev);
+  if(typeof msg!=='string') return;
+  // console.debug(msg);
+  if(msg.startsWith('uciok')){ engineReady=true; setEngineStatus('Stockfish ready','on'); configureEngine(); requestAnalysis(); }
+  else if(msg.startsWith('readyok')){}
+  else if(msg.startsWith('info')){
+    const d=/\bdepth (\d+)/.exec(msg);
+    const cp=/score cp (-?\d+)/.exec(msg);
+    const mate=/score mate (-?\d+)/.exec(msg);
+    const pv=/\bpv (.+)/.exec(msg);
+    const nodes=/\bnodes (\d+)/.exec(msg);
+    const nps=/\bnps (\d+)/.exec(msg);
+    if(d) curDepth=+d[1];
+    if(pv) curPv=pv[1].trim().split(/\s+/);
+    if(nodes) curNodes=+nodes[1];
+    if(nps) kNps.textContent=(+nps[1]/1000).toFixed(1);
+    if(cp||mate){
+      // cp is relative to side to move; convert to white perspective
+      const fen=currentFen(); const stm=fen.split(' ')[1]==='w'?1:-1;
+      let whiteCp;
+      if(mate){ let m=+mate[1]; whiteCp=null; curMate=stm*m; setEval(curScoreCp,curMate); }
+      else { whiteCp=stm*(+cp[1]); setEval(whiteCp,null); }
+      depthEl.textContent=curDepth;
+      if(curNodes) kNodes.textContent=curNodes>1000?(curNodes/1000).toFixed(1)+'k':curNodes;
+      if(searchStart) kTime.textContent=((Date.now()-searchStart)/1000).toFixed(1)+'s';
+      renderPv();
+    }
+  }
+  else if(msg.startsWith('bestmove')){
+    const m=/bestmove (\S+)/.exec(msg);
+    engineThinking=false; thinkEl.textContent='idle'; setEngineStatus('Stockfish ready','on');
+    if(m&&m[1]!=='(none)'){
+      const uci=m[1];
+      best={from:uci.slice(0,2),to:uci.slice(2,4),uci};
+      const san=uciToSan(uci);
+      bestEl.textContent=san?`${san} (${uci})`:uci;
+      render();
+      // if engine is to move in play mode, play it
+      maybeEngineMove(true);
+    }
+  }
+}
+function configureEngine(){
+  const sk=$('skill').value||'20';
+  try{ engine.postMessage('setoption name Skill Level value '+sk); engine.postMessage('isready'); }catch(e){}
+}
+function uciToSan(uci){
+  try{
+    const g=boardState();
+    const mv=g.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||'q'});
+    if(!mv) return null;
+    const san=mv.san; g.undo(); return san;
+  }catch(e){return null;}
+}
+function pvToSan(pvList){
+  try{
+    const g=boardState(); const out=[];
+    for(const u of pvList.slice(0,8)){ const mv=g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]||'q'}); if(!mv)break; out.push(mv.san); }
+    return out.join(' ');
+  }catch(e){return '';}
+}
+function renderPv(){
+  const san=pvToSan(curPv);
+  pvEl.innerHTML = san? `<b style="color:#5eead4">PV:</b> ${san}` : 'Calculating…';
+}
+let analysisTimer=null;
+function requestAnalysis(){
+  if(!engine||!engineReady||!analyzeOn) { if(!analyzeOn){thinkEl.textContent='paused';} return; }
+  clearTimeout(analysisTimer);
+  analysisTimer=setTimeout(()=>{
+    try{
+      engine.postMessage('stop');
+      const fen=currentFen();
+      engine.postMessage('position fen '+fen);
+      const depth=$('depthRange').value||'16';
+      engineThinking=true; thinkEl.textContent='thinking…'; setEngineStatus('Stockfish thinking…','think');
+      searchStart=Date.now();
+      engine.postMessage('go depth '+depth);
+    }catch(e){}
+  },180);
+}
+// play vs engine
+function engineColor(){ const m=$('mode').value; return m==='analyze'?null:m; }
+function maybeEngineMove(fromBest){
+  const ec=engineColor();
+  $('playStatus').textContent = !ec? 'Analysis mode: make moves for both sides.' : ('You play '+(ec==='w'?'White':'Black')+' • engine plays '+(ec==='w'?'Black':'White')+'.');
+  if(!ec||!atView()) return;
+  const g=game;
+  if(g.turn()!==ec) return;
+  if(g.game_over&&g.game_over()) return;
+  if(fromBest&&best.uci){
+    // play the best move found
+    doEngineMove(best.uci); return;
+  }
+  // ask engine for a move
+  if(!engine||!engineReady) return;
+  if(engineThinking) return;
+  try{
+    engine.postMessage('stop');
+    engine.postMessage('position fen '+game.fen());
+    engineThinking=true; thinkEl.textContent='engine to move…';
+    const d=$('playDepth').value||'14';
+    setTimeout(()=>{try{engine.postMessage('go depth '+d);}catch(e){}},120);
+  }catch(e){}
+}
+function doEngineMove(uci){
+  try{
+    const from=uci.slice(0,2),to=uci.slice(2,4),promo=uci[4];
+    const mv=game.move({from,to,promotion:promo||'q'});
+    if(!mv) return;
+    historyStack.push({from:mv.from,to:mv.to,promotion:mv.promotion,san:mv.san,color:mv.color,flags:mv.flags});
+    redoStack=[];viewPly=historyStack.length;syncPositions();
+    evals[viewPly]=evals[viewPly-1]??0;
+    best={from:null,to:null,uci:null};
+    beep(440); render(); requestAnalysis();
+  }catch(e){}
+}
+// ---- promotion ----
+let promoCb=null;
+function askPromotion(cb){ promoCb=cb; $('promo').classList.add('open'); }
+document.querySelectorAll('#promo button').forEach(b=>b.addEventListener('click',()=>{ $('promo').classList.remove('open'); if(promoCb)promoCb(b.dataset.p); promoCb=null; }));
+
+// ---- wiring ----
+$('btnNew').onclick=()=>{ game.reset(); historyStack=[];redoStack=[];viewPly=0;positions=[];evals=[0];best={};setEval(0,null);curDepth=0;curPv=[];bestEl.textContent='–';pvEl.textContent='New game — engine analyzing…';syncPositions();render();requestAnalysis(); };
+$('btnFlip').onclick=()=>{orientation=orientation==='w'?'b':'w';render();};
+$('btnFlip2').onclick=()=>{orientation=orientation==='w'?'b':'w';render();};
+$('btnUndo').onclick=undo; $('btnRedo').onclick=redo;
+$('btnStart').onclick=()=>{viewPly=0;render();requestAnalysis();};
+$('btnPrev').onclick=()=>{if(viewPly>0)viewPly--;render();requestAnalysis();};
+$('btnNext').onclick=()=>{if(viewPly<historyStack.length)viewPly++;render();requestAnalysis();};
+$('btnEnd').onclick=()=>{viewPly=historyStack.length;render();requestAnalysis();};
+$('btnHint').onclick=()=>{ if(best.uci){ const s=uciToSan(best.uci); pvEl.innerHTML=`<b>Hint:</b> play <b>${s||best.uci}</b>`; beep(660);} else { pvEl.textContent='Hint: engine is thinking…'; requestAnalysis(); } };
+$('btnPlayBest').onclick=()=>{ if(best.uci&&atView()){ const u=best.uci; best={}; doMove(u.slice(0,2),u.slice(2,4),u[4]); } };
+$('btnArrow').onclick=e=>{ showArrow=!showArrow; e.target.textContent='Show arrow: '+(showArrow?'ON':'OFF'); render(); };
+$('btnAnalyze').onclick=e=>{ analyzeOn=!analyzeOn; e.target.textContent=analyzeOn?'⏸ Pause analysis':'▶ Resume analysis'; if(analyzeOn)requestAnalysis(); else {try{engine&&engine.postMessage('stop');}catch(_){} thinkEl.textContent='paused';} };
+$('btnSound').onclick=e=>{ soundOn=!soundOn; e.target.textContent=soundOn?'🔊 Sound: on':'🔇 Sound: off'; };
+$('depthRange').oninput=e=>{ $('depthVal').textContent=e.target.value; requestAnalysis(); };
+$('skill').onchange=configureEngine;
+$('mode').onchange=render;
+$('btnCopyFen').onclick=async()=>{ try{await navigator.clipboard.writeText(currentFen()); statusEl.innerHTML='FEN copied to clipboard ✓';}catch(e){ fenInput.select(); document.execCommand('copy'); } };
+$('btnCopyPgn').onclick=async()=>{ try{await navigator.clipboard.writeText(game.pgn()); statusEl.innerHTML='PGN copied ✓';}catch(e){} };
+$('btnLoadFen').onclick=()=>{
+  const f=fenInput.value.trim(); const g=chessjs(f);
+  if(!g){statusEl.innerHTML='<b>Invalid FEN</b>';return;}
+  game=g; historyStack=g.history({verbose:true}).map(m=>({from:m.from,to:m.to,promotion:m.promotion,san:m.san,color:m.color,flags:m.flags}));
+  redoStack=[];viewPly=historyStack.length;syncPositions();evals=new Array(historyStack.length+1).fill(0);
+  render();requestAnalysis();
+};
+$('btnPastePgn').onclick=()=>{
+  const p=prompt('Paste PGN:'); if(!p) return;
+  const g=new Chess(); try{ if(!g.load_pgn(p)){alert('Invalid PGN');return;} }catch(e){alert('Invalid PGN');return;}
+  game=g; historyStack=g.history({verbose:true}).map(m=>({from:m.from,to:m.to,promotion:m.promotion,san:m.san,color:m.color,flags:m.flags}));
+  redoStack=[];viewPly=historyStack.length;syncPositions();evals=new Array(historyStack.length+1).fill(0);
+  render();requestAnalysis();
+};
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key==='ArrowLeft')$('btnPrev').click();
+  if(e.key==='ArrowRight')$('btnNext').click();
+  if(e.key==='u')undo();
+  if(e.key==='f')$('btnFlip').click();
+});
+// boot
+syncPositions(); render(); initEngine();
+})();
+</script>
 </body>
 </html>
