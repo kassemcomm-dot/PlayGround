@@ -3,34 +3,68 @@ name: Build APK
 on:
   push:
     branches:
+      - main
       - opencode-checkpoints/1
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
-    steps:
-      - name: Checkout
+steps:
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+- name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+- name: Install dependencies
+        run: npm ci
+
+- name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '21'
 
-      - name: Set up Android SDK
+- name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build APK
-        working-directory: playground
+- name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+- name: Check web assets
+        run: |
+          if [ ! -f www/index.html ]; then
+            echo "::error::Missing www/index.html"
+            exit 1
+          fi
+
+- name: Sync Capacitor Android
+        run: npx cap sync android
+
+- name: Build debug APK
+        working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK
+- name: Verify APK exists
+        run: test -s android/app/build/outputs/apk/debug/app-debug.apk
+
+- name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: playground/app/build/outputs/apk/debug/app-debug.apk
+          name: chess-analyzer-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
